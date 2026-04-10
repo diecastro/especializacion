@@ -29,6 +29,7 @@ def normalize_columns(df: pd.DataFrame) -> pd.DataFrame:
     - reemplaza vocales acentuadas
     """
     df = df.copy()
+    df.columns = df.columns.astype(str)
     df.columns = (
         df.columns
         .str.strip()
@@ -41,7 +42,7 @@ def normalize_columns(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
-def compute_row_null_pct(df: pd.DataFrame, exclude_cols: list) -> pd.Series:
+def compute_row_null_pct(df: pd.DataFrame, exclude_cols: list[str]) -> pd.Series:
     """
     Calcula la fracción de columnas nulas por fila, excluyendo columnas
     estructuralmente vacías en la fuente.
@@ -71,6 +72,8 @@ def load_excel(filepath: str, sheet_name: str = "Page1_1") -> pd.DataFrame:
         raise FileNotFoundError(f"Archivo no encontrado: {path.resolve()}")
 
     df = pd.read_excel(filepath, sheet_name=sheet_name, dtype=str)
+    # dtype=str es intencional: previene coerción silenciosa de fechas y números.
+    # Todo el parseo de tipos ocurre en la capa de transformación.
     df = normalize_columns(df)
     # Calcular row_null_pct antes de renombrar (COLS_VACIAS_POR_DISENO usa nombres pre-rename)
     df["row_null_pct"] = compute_row_null_pct(df, exclude_cols=list(COLS_VACIAS_POR_DISENO))

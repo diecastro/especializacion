@@ -53,3 +53,5 @@ def test_load_excel_returns_dataframe(tmp_path):
     assert "marca" in df.columns
     assert "item_id" in df.columns
     assert len(df) == 1
+    assert "row_null_pct" in df.columns
+    assert df["row_null_pct"].between(0.0, 1.0).all()
