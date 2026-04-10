@@ -26,4 +26,5 @@ UMBRAL_PROXIMO: int = 30   # 16–30 días → 'proximo_a_vencer'
 UMBRAL_NULOS_FILA: float = 0.15
 
 # Columnas a excluir del cálculo de row_null_pct (vacías por diseño en la fuente)
-COLS_VACIAS_POR_DISENO: tuple[str, ...] = ("id_inventario", "rotacion_raw", "estado_raw")
+# Nombres normalizados a snake_case tal como salen de normalize_columns (antes de _RENAME_MAP)
+COLS_VACIAS_POR_DISENO: tuple[str, ...] = ("id_inventario", "rotacion", "estado")
