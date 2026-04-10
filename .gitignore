@@ -1,0 +1,28 @@
+
+# Claude Code — configuración local y memoria de sesión
+.claude/
+
+# Sistema operativo
+.DS_Store
+
+# Credenciales — nunca versionar
+.env
+.env.*
+!.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Artefactos ML
+models/*.pkl
+models/*.joblib
+
+# Archivos temporales de Office
+~$*
