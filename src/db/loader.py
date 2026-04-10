@@ -101,6 +101,17 @@ class InventoryLoader:
         "row_null_pct", "calidad_flag",
     }
 
+    @staticmethod
+    def _to_records(df: pd.DataFrame) -> list:
+        """
+        Convierte un DataFrame a lista de dicts reemplazando NaT y NaN por None.
+        Necesario porque psycopg2 serializa pd.NaT como la cadena 'NaT' en lugar
+        de NULL, lo que causa InvalidDatetimeFormat en PostgreSQL.
+        """
+        # astype(object) convierte datetime64 → Python datetime y NaT → NaT (objeto).
+        # where(notna, None) reemplaza NaT/NaN por Python None (que psycopg2 envía como NULL).
+        return df.astype(object).where(pd.notna(df), other=None).to_dict(orient="records")
+
     def __init__(
         self,
         df_raw: pd.DataFrame,
@@ -217,7 +228,7 @@ class InventoryLoader:
 
         with self.engine.connect() as conn:
             conn.execute(text("COMMIT"))
-            rows = df[clean_cols].to_dict(orient="records")
+            rows = self._to_records(df[clean_cols])
             for chunk_start in range(0, len(rows), 500):
                 chunk = rows[chunk_start:chunk_start + 500]
                 stmt = text("""
@@ -295,7 +306,7 @@ class InventoryLoader:
 
         with self.engine.connect() as conn:
             conn.execute(text("COMMIT"))
-            rows = df[fact_cols].to_dict(orient="records")
+            rows = self._to_records(df[fact_cols])
             for chunk_start in range(0, len(rows), 500):
                 chunk = rows[chunk_start:chunk_start + 500]
                 stmt = text("""
@@ -343,7 +354,7 @@ class InventoryLoader:
 
         with self.engine.connect() as conn:
             conn.execute(text("COMMIT"))
-            rows = df[ml_cols].to_dict(orient="records")
+            rows = self._to_records(df[ml_cols])
             for chunk_start in range(0, len(rows), 500):
                 chunk = rows[chunk_start:chunk_start + 500]
                 stmt = text("""
