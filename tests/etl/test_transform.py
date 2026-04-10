@@ -10,6 +10,7 @@ from src.etl.transform import (
     compute_score_riesgo,
     apply_calidad_flag,
     clean_outliers,
+    impute_unds,
 )
 from src.etl import FECHA_CORTE
 
@@ -117,6 +118,34 @@ def test_clean_outliers_negative_unds():
     assert pd.isna(result.loc[2, "unds"])   # 0 → null
     assert result.loc[0, "unds"] == 10.0
     assert result.loc[3, "unds"] == 5.0
+
+
+# --- impute_unds ---
+
+def test_impute_unds_fills_with_median():
+    # Mediana de [10, 20, 30] = 20
+    df = pd.DataFrame({"unds": [10.0, 20.0, None, 30.0, None]})
+    result = impute_unds(df)
+    assert result["unds"].isna().sum() == 0
+    assert result.loc[2, "unds"] == 20.0
+    assert result.loc[4, "unds"] == 20.0
+
+def test_impute_unds_no_op_when_no_nulls():
+    df = pd.DataFrame({"unds": [10.0, 20.0, 30.0]})
+    result = impute_unds(df)
+    assert list(result["unds"]) == [10.0, 20.0, 30.0]
+
+def test_impute_unds_no_op_without_column():
+    df = pd.DataFrame({"otra_col": [1, 2, 3]})
+    result = impute_unds(df)
+    assert list(result.columns) == ["otra_col"]
+
+def test_impute_unds_uses_median_not_mean():
+    # Distribución asimétrica: mediana=10, media=370/3≈123
+    df = pd.DataFrame({"unds": [5.0, 10.0, None, 1000.0]})
+    result = impute_unds(df)
+    # Mediana de [5, 10, 1000] = 10
+    assert result.loc[2, "unds"] == 10.0
 
 
 # --- build_derived_columns ---

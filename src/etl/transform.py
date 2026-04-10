@@ -78,6 +78,29 @@ def clean_outliers(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
+def impute_unds(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Imputa unds nulas con la mediana del lote.
+
+    Supuesto: unds es asimétrica (inventario cosmético tiene una cola larga hacia
+    arriba), por lo que la mediana es mejor estimador que la media.
+    Se aplica DESPUÉS de clean_outliers para que los outliers por error (<=0)
+    no contaminen la mediana de referencia.
+    La calidad_flag 'unds_invalidas' ya documentó el estado original del dato.
+    """
+    df = df.copy()
+    if "unds" not in df.columns:
+        return df
+    n_nulos = int(df["unds"].isna().sum())
+    if n_nulos == 0:
+        return df
+    median_unds = df["unds"].median()
+    df["unds"] = df["unds"].fillna(median_unds)
+    # Supuesto documentado: imputación con mediana del lote actual
+    print(f"    Imputación: {n_nulos} nulos en 'unds' → mediana ({median_unds:.1f} unds)")
+    return df
+
+
 def drop_low_quality_rows(df: pd.DataFrame) -> tuple:
     """Elimina registros con >UMBRAL_NULOS_FILA nulos en columnas relevantes."""
     cols_relevantes = [c for c in df.columns if c not in COLS_VACIAS_POST_RENAME]
@@ -108,6 +131,7 @@ def transform(df: pd.DataFrame, fecha_corte=FECHA_CORTE) -> tuple:
     """Pipeline completo. Returns (df_clean, df_dropped)."""
     df = cast_types(df)
     df = clean_outliers(df)
+    df = impute_unds(df)          # después de clean_outliers: mediana sin outliers por error
     df, df_dropped = drop_low_quality_rows(df)
     df = build_derived_columns(df, fecha_corte)
     return df, df_dropped
