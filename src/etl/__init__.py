@@ -27,4 +27,9 @@ UMBRAL_NULOS_FILA: float = 0.15
 
 # Columnas a excluir del cálculo de row_null_pct (vacías por diseño en la fuente)
 # Nombres normalizados a snake_case tal como salen de normalize_columns (antes de _RENAME_MAP)
+# Usado en extract.py → compute_row_null_pct (se ejecuta ANTES de aplicar _RENAME_MAP)
 COLS_VACIAS_POR_DISENO: tuple[str, ...] = ("id_inventario", "rotacion", "estado")
+
+# Mismas columnas con sus nombres POST _RENAME_MAP (después del rename en load_excel)
+# Usado en transform.py → drop_low_quality_rows (se ejecuta DESPUÉS de load_excel)
+COLS_VACIAS_POST_RENAME: tuple[str, ...] = ("id_inventario", "rotacion_raw", "estado_raw")

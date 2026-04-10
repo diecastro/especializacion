@@ -3,7 +3,7 @@
 ETL — Transformación. Umbrales en src/etl/__init__.py, sincronizados con sql/03_reglas_negocio.sql.
 """
 import pandas as pd
-from src.etl import FECHA_CORTE, UMBRAL_CRITICO, UMBRAL_PROXIMO, COLS_VACIAS_POR_DISENO, UMBRAL_NULOS_FILA
+from src.etl import FECHA_CORTE, UMBRAL_CRITICO, UMBRAL_PROXIMO, COLS_VACIAS_POST_RENAME, UMBRAL_NULOS_FILA
 
 
 def classify_estado(dias_para_vencimiento) -> str:
@@ -80,7 +80,7 @@ def clean_outliers(df: pd.DataFrame) -> pd.DataFrame:
 
 def drop_low_quality_rows(df: pd.DataFrame) -> tuple:
     """Elimina registros con >UMBRAL_NULOS_FILA nulos en columnas relevantes."""
-    cols_relevantes = [c for c in df.columns if c not in COLS_VACIAS_POR_DISENO]
+    cols_relevantes = [c for c in df.columns if c not in COLS_VACIAS_POST_RENAME]
     null_frac = df[cols_relevantes].isnull().mean(axis=1)
     mask_ok = null_frac <= UMBRAL_NULOS_FILA
     return df[mask_ok].copy(), df[~mask_ok].copy()
