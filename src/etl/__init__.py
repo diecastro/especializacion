@@ -3,12 +3,12 @@ Inventarios 360 — ETL
 Constantes de negocio. Modificar aquí si cambian los umbrales.
 Mantener sincronizado con sql/03_reglas_negocio.sql.
 """
-import pandas as pd
+from datetime import date
 
 # Fecha de corte fija para reproducibilidad.
 # Supuesto: se usa 2025-04-01 como fecha de referencia del análisis.
 # Si se cambia, documentar el motivo y re-ejecutar el pipeline completo.
-FECHA_CORTE: pd.Timestamp = pd.Timestamp("2025-04-01")
+FECHA_CORTE: date = date(2025, 4, 1)
 
 # Fuente de datos
 SOURCE_FILE: str = "datos_proyecto/Fechas de Vencimiento Beauty Care 1.xlsx"
@@ -26,4 +26,4 @@ UMBRAL_PROXIMO: int = 30   # 16–30 días → 'proximo_a_vencer'
 UMBRAL_NULOS_FILA: float = 0.15
 
 # Columnas a excluir del cálculo de row_null_pct (vacías por diseño en la fuente)
-COLS_VACIAS_POR_DISENO: list[str] = ["id_inventario", "rotacion_raw", "estado_raw"]
+COLS_VACIAS_POR_DISENO: tuple[str, ...] = ("id_inventario", "rotacion_raw", "estado_raw")
