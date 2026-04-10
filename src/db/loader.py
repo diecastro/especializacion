@@ -24,8 +24,6 @@ from pathlib import Path
 
 import pandas as pd
 from sqlalchemy import text
-from sqlalchemy.dialects.postgresql import insert as pg_insert
-
 from src.db.connection import get_connection, get_engine
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
@@ -47,22 +45,26 @@ class SchemaLoader:
     ]
 
     def run_file(self, filename: str) -> None:
-        """Ejecuta un archivo SQL dividiendo por punto y coma."""
+        """
+        Ejecuta un archivo SQL completo usando una conexión psycopg2 directa.
+        No divide por ';' para preservar funciones PL/pgSQL con bloques $$ ... $$.
+        """
         filepath = SQL_DIR / filename
         if not filepath.exists():
             raise FileNotFoundError(f"No se encontro: {filepath}")
 
         sql = filepath.read_text(encoding="utf-8")
-        # Usar autocommit para DDL (psycopg2 requiere salir de la transacción)
-        engine = get_engine()
-        with engine.connect() as conn:
-            conn.execute(text("COMMIT"))
-            for stmt in [s.strip() for s in sql.split(";") if s.strip()]:
-                try:
-                    conn.execute(text(stmt))
-                    conn.execute(text("COMMIT"))
-                except Exception as exc:
-                    print(f"    Advertencia [{filename}]: {exc}")
+        raw_conn = get_engine().raw_connection()
+        try:
+            cur = raw_conn.cursor()
+            cur.execute(sql)
+            raw_conn.commit()
+            cur.close()
+        except Exception as exc:
+            raw_conn.rollback()
+            raise RuntimeError(f"Error ejecutando {filename}: {exc}") from exc
+        finally:
+            raw_conn.close()
 
         print(f"  OK: {filename}")
 
@@ -121,24 +123,21 @@ class InventoryLoader:
     # ------------------------------------------------------------------
 
     def load_stg_raw(self) -> int:
-        """Carga los datos crudos a stg.inventory_raw para trazabilidad."""
+        """
+        Carga los datos crudos a stg.inventory_raw para trazabilidad.
+        df_raw ya viene con columnas en snake_case del extractor (load_excel),
+        por lo que no se necesita rename. Solo se mapean los tres campos que el
+        staging almacena como texto _raw pero el extractor nombra sin sufijo.
+        """
         df = self.df_raw.copy()
         df["source_file"] = self.source_file
 
-        # Renombrar columnas al formato del staging
+        # Mapeo exclusivo para columnas cuyo nombre difiere entre df_raw y stg
+        # (el extractor usa fecha_ingreso/fecha_vencimiento/unds; el staging los guarda como _raw)
         rename_map = {
-            "Marca": "marca",
-            "Item ID": "item_id",
-            "ID Inventario": "id_inventario",
-            "Descripción": "descripcion",
-            "Categoría": "categoria",
-            "Unds": "unds_raw",
-            "Fecha de Ingreso": "fecha_ingreso_raw",
-            "Fecha Vencimiento": "fecha_vencimiento_raw",
-            "Dias antes de Vencimiento": "dias_antes_vencimiento_raw",
-            "Contenedor": "contenedor",
-            "Rotación": "rotacion_raw",
-            "Estado": "estado_raw",
+            "unds": "unds_raw",
+            "fecha_ingreso": "fecha_ingreso_raw",
+            "fecha_vencimiento": "fecha_vencimiento_raw",
         }
         df = df.rename(columns=rename_map)
 
@@ -147,7 +146,6 @@ class InventoryLoader:
             "categoria", "unds_raw", "fecha_ingreso_raw", "fecha_vencimiento_raw",
             "dias_antes_vencimiento_raw", "contenedor", "rotacion_raw", "estado_raw",
         ]
-        # Solo columnas que existen en el DataFrame
         stg_cols = [c for c in stg_cols if c in df.columns]
 
         df[stg_cols].to_sql(
@@ -190,7 +188,8 @@ class InventoryLoader:
 
         with get_connection() as conn:
             return pd.read_sql(
-                "SELECT producto_sk, item_id FROM dw.dim_producto", conn
+                "SELECT producto_sk, item_id, descripcion, categoria, marca FROM dw.dim_producto",
+                conn,
             )
 
     # ------------------------------------------------------------------
@@ -257,8 +256,9 @@ class InventoryLoader:
         df = self.df_clean.copy()
         df["fecha_corte"] = self.fecha_corte.date()
 
-        # Resolver FK producto
-        df = df.merge(df_producto, on="item_id", how="left")
+        # Resolver FK producto usando los 4 atributos de la clave de unicidad de dim_producto
+        # para evitar joins ambiguos cuando un item_id tiene múltiples combinaciones de atributos
+        df = df.merge(df_producto, on=["item_id", "descripcion", "categoria", "marca"], how="left")
 
         # Resolver FKs tiempo (ingreso y vencimiento)
         with get_connection() as conn:
@@ -281,6 +281,17 @@ class InventoryLoader:
             "unds", "dias_en_inventario", "dias_para_vencimiento",
             "score_riesgo", "estado_inventario", "segmento_rotacion",
         ]
+
+        # Validar FKs antes de insertar para detectar relaciones rotas
+        n_sin_producto = df["producto_sk"].isna().sum()
+        n_sin_t_ingreso = df["tiempo_ingreso_sk"].isna().sum()
+        n_sin_t_vencimiento = df["tiempo_vencimiento_sk"].isna().sum()
+        if n_sin_producto:
+            print(f"    Advertencia: {n_sin_producto} filas sin producto_sk (quedarán con FK nula).")
+        if n_sin_t_ingreso:
+            print(f"    Advertencia: {n_sin_t_ingreso} filas sin tiempo_ingreso_sk (fecha_ingreso fuera de dim_tiempo).")
+        if n_sin_t_vencimiento:
+            print(f"    Advertencia: {n_sin_t_vencimiento} filas sin tiempo_vencimiento_sk (fecha_vencimiento fuera de dim_tiempo).")
 
         with self.engine.connect() as conn:
             conn.execute(text("COMMIT"))
