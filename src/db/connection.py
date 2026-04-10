@@ -99,7 +99,9 @@ def get_engine(echo: bool = False):
             max_overflow=10,
             connect_args={
                 "connect_timeout": 10,
-                "options": f"-c search_path={_SEARCH_PATH}",
+                # search_path se aplica via el listener 'connect' de abajo.
+                # No usar "options": "-c search_path=..." aquí: el pooler de Neon
+                # (PgBouncer) rechaza parámetros de startup en la cadena de conexión.
             },
         )
 
